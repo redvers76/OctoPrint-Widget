@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap" rel="stylesheet">
+    <script src="https://kit.fontawesome.com/##yourfontawesomekeyhere##.js" crossorigin="anonymous"></script>
+    <title>OctoPrint Widget (C) K.Fairhurst 2021</title>
+   </head>
+<style>
+    t1 {
+        font-family: Oswald, sans-serif;
+        width: 360px;
+        display: inline-block;
+        text-decoration: none;
+        text-align: center;
+        color: rgb(33,153,255);
+        background-color: rgba(0,0,0,0);
+        font-size: 16px; }
+    p60 {
+        font-family: Oswald, sans-serif;
+        width: 60px;
+        display: inline-block;
+        text-align: center;
+        text-decoration: none;
+        color: rgb(33,153,255);
+        background-color: rgba(0,0,0,0);
+        font-size: 14px; }
+    p90 {
+        font-family: Oswald, sans-serif;
+        width: 90px;
+        display: inline-block;
+        text-align: center;
+        text-decoration: none;
+        color: rgb(33,153,255);
+        background-color: rgba(0,0,0,0);
+        font-size: 14px; }
+    p360w {
+        font-family: Oswald, sans-serif;
+        width: 360px;
+        display: inline-block;
+        text-align: center;
+        text-decoration: none;
+        color: white;
+        background-color: rgba(0,0,0,0);
+        font-size: 14px; }
+    p360b {
+        font-family: Oswald, sans-serif;
+        width: 360px;
+        display: inline-block;
+        text-align: center;
+        text-decoration: none;
+        color: rgb(33,153,255);
+        background-color: rgba(0,0,0,0);
+        font-size: 14px; }
+    i.fas, i.fab, i.far {
+       background-color: rgba(0,0,0,0);
+       font-size: 30px; 
+       text-decoration: none;
+       display: inline flow-root;
+       width: 60px;
+       text-align: center; }
+    .fa-hidden { color: transparent; }
+    .fa-showing { color: silver; }
+    body { overflow: hidden; }
+</style>
+
+<body>
+    <!-- Display -->
+    <t1 id="t_title">&nbsp;</t1><br>
+    <i id="i_status"></i><i id="i_total"></i><i id="i_printed"></i><i id="i_remain"></i><br>
+    <p90 id="d_status">&nbsp;</p90><p90 id="d_total">&nbsp;</p90><p90 id="d_printed">&nbsp;</p90><p90 id="d_remain">&nbsp;</p90><br>
+    <p360w id="d_progress">&nbsp;</p360w><br>
+    <p360b id="d_message">&nbsp;</p360b><br>
+    <p60 id="d_item0Target">&nbsp;</p60><p60 id="d_item1Target">&nbsp;</p60><p60 id="d_item2Target">&nbsp;</p60><p60 id="d_item3Target">&nbsp;</p60><p60 id="d_item4Target">&nbsp;</p60><p60 id="d_item5Target">&nbsp;</p60><br>
+    <i id="i_item0Type"></i><i id="i_item1Type"></i><i id="i_item2Type"></i><i id="i_item3Type"></i><i id="i_item4Type"></i><i id="i_item5Type"></i><br>
+    <p60 id="d_item0Actual">&nbsp;</p60><p60 id="d_item1Actual">&nbsp;</p60><p60 id="d_item2Actual">&nbsp;</p60><p60 id="d_item3Actual">&nbsp;</p60><p60 id="d_item4Actual">&nbsp;</p60><p60 id="d_item5Actual">&nbsp;</p60><br>
+    <i id="i_item0Temp"></i><i id="i_item1Temp"></i><i id="i_item2Temp"></i><i id="i_item3Temp"></i><i id="i_item4Temp"></i><i id="i_item5Temp"></i>
+<script>
+    // Version 1.0 of OctoPrint Widget
+    // (C) K.Fairhurst 2021
+    // v1.0   Initial Release
+
+    // Following configuration items are used to determine how the widget will work
+    //
+
+    // Create a DAKBoard user in OctoPrint, with read only permissions
+    // Then create an application key for this user
+    // This will be used to authenticate the requests to the API 
+    //
+
+    const g_apiKey = "### Enter API key here ###";
+
+    // The DAKBoard server that hosts your widget needs to be able to access the computer running OctoPrint
+    // As such it cannot be an "internal network" URL that you use here, rather one that can be accessed remotely
+    // Use a dynamic DNS service to ensure your IP address is continually updated, or use your external IP address
+    // 
+
+    const g_baseURL = "### Enter server address here ###";
+
+    // Because the DAKBoard service uses HTTPS, we need to use HTTPS to ensure that the content can be included
+    // Whether or not you use port 443 externally is up to you,
+    // This external port will need to be forwarded to port 443 of the computer running OctoPrint
+    // You also need to ensure that you have an appropriate certificate installed otherwise the widget might not load
+    //
+
+    const g_basePort = "443"
+
+    // Final configuration is for what we show on the temperatue display lines... 
+    //
+
+    const g_tempConfig = [ "bed"
+                         , "chamber"
+                         , "filament0"
+                         , "filament1"
+                         , "tool0"
+                         , "tool1"
+                         ];
+
+    // Now set up the URLs 
+
+    const g_currentuserURL = "https://" + g_baseURL + ":" + g_basePort + "/api/currentuser";
+    const g_serverURL      = "https://" + g_baseURL + ":" + g_basePort + "/api/server";
+    const g_connectionURL  = "https://" + g_baseURL + ":" + g_basePort + "/api/connection";
+    const g_printerURL     = "https://" + g_baseURL + ":" + g_basePort + "/api/printer";
+    const g_jobURL         = "https://" + g_baseURL + ":" + g_basePort + "/api/job";
+
+    // Following is used to adjust sizes of text boxes.
+
+    const g_headerLen  = 45;
+    const g_messageLen = 50;
+
+    // Handy to see what is happening with the JSON / API calls 
+
+    const g_debugEnabled   = false;
+
+    // Starts at 1000ms == 1s 
+
+    var g_displayRefresh = 1000;
+
+    var g_permissionsStatus     = false;
+    var g_permissionsConnection = false;
+    var g_permissionsFilesList  = false;
+
+    var g_server         = [];
+    var g_serverVersion  = "";
+    var g_serverSafemode = "";
+
+    var g_switchedOn     = true;
+    var g_printerProfile = "";
+    var g_printerName    = "Not connected";
+    var g_current_state  = "Connecting";
+    var g_cancelledLoop  = 0;
+
+    var g_filament0_length = 0;
+    var g_filament1_length = 0;
+    var g_filament0_volume = 0;
+    var g_filament1_volume = 0;
+
+    clearDisplay();
+
+    setHeader( "Connecting to OctoPrint ..." );
+
+    // First off, find out the permissions associated with the user we are using.
+    // There is one key permissions we need to actually be able to work - STATUS
+    // If that's not available then we error out. No point running in a loop
+    // checking every minute if the script is not going to work!
+    //
+
+    let xhr_currentuser = new XMLHttpRequest();
+    xhr_currentuser.open( 'GET', g_currentuserURL );
+    xhr_currentuser.setRequestHeader( 'Authorization', 'Bearer ' + g_apiKey );
+    xhr_currentuser.responseType = 'json';
+    xhr_currentuser.send();
+
+    xhr_currentuser.onload = function() {
+
+        // Store the response received 
+
+        const v_currentuserResponse = xhr_currentuser.response;
+
+        if ( g_debugEnabled ) {
+
+            // Handy for debugging purposes ! 
+
+            console.log( v_currentuserResponse );
+
+        }  // if ( g_debugEnabled )
+
+        if ( v_currentuserResponse.permissions != null ) {
+
+            // Loop through the available permissions and set flags for the ones we are interested in.
+            // Currently just interested in STATUS but capturing other potential flags that might be
+            // something we can make use of in future iterations 
+
+            let v_permissionsLoop = 0;
+
+            while ( v_permissionsLoop < v_currentuserResponse.permissions.length ) {
+
+                if ( v_currentuserResponse.permissions[ v_permissionsLoop ] == "STATUS" ) {
+
+                    g_permissionsStatus = true;
+
+                } else if ( v_currentuserResponse.permissions[ v_permissionsLoop ] == "CONNECTION" ) {
+
+                    g_permissionsConnection = true;
+
+                } else if ( v_currentuserResponse.permissions[ v_permissionsLoop ] == "FILES_LIST" ) {
+
+                    g_permissionsFilesList = true;
+
+                }  // if ( v_currentuserResponse.permissions[ v_permissionsLoop ] == "STATUS" ) 
+
+                v_permissionsLoop += 1;
+
+            }  // while ( v_permissionsLoop < v_currentuserResponse.permissions.length )
+
+            if ( g_permissionsStatus ) {
+
+                let xhr_server = new XMLHttpRequest();
+                xhr_server.open( 'GET', g_serverURL );
+                xhr_server.setRequestHeader( 'Authorization', 'Bearer ' + g_apiKey );
+                xhr_server.responseType = 'json';
+                xhr_server.send();
+
+                xhr_server.onload = function() {
+
+                    // Store the response received 
+
+                    const v_serverResponse = xhr_server.response;
+
+                    if ( g_debugEnabled ) {
+
+                        // Handy for debugging purposes ! 
+
+                        console.log( v_serverResponse );
+
+                    }  // if ( g_debugEnabled )
+
+                    if ( v_serverResponse.version != null ) {
+
+                        g_serverVersion  = v_serverResponse.version;
+                        g_serverSafemode = v_serverResponse.safemode;
+
+                        if ( g_serverSafemode == ""
+                          || g_serverSafemode == null
+                           ) {
+
+                            // At this point we know OctoPrint is online and responding... 
+
+                            myMain();
+
+                        } else {
+
+                            // Server appears to be in safemode - not going to do anything!
+
+                            serverError();
+
+                        }  // if ( g_serverSafemode == "" ...
+
+                    } else {
+
+                        // We didn't receive a version number which suggests an invalid response
+
+                        g_serverVersion  = "server";
+
+                        if ( g_serverSafemode == "" 
+                          || g_serverSafemode == null
+                           ) {
+
+                            g_serverSafemode = "server API endpoint is missing version info";
+
+                        }  // if ( g_serverSafemode == ""  ...
+
+                        serverError();
+
+                    }  // if ( v_serverResponse.version != null )
+
+                }  // xhr_server.onload = function()
+
+                xhr_server.onerror = function() {
+
+                    // Something has gone wrong, but we do not know what
+
+                    g_serverVersion  = "server";
+                    g_serverSafemode = "Unable to call server API endpoint";
+
+                    serverError();
+
+                }  // xhr_server.onerror = function()
+
+            } else {
+
+                // If we don't even have the ability to see the OctoPrint status then there is no point continuing!
+
+                currentuserError();
+
+            }  // if ( g_permissionsStatus )
+
+        } else {
+
+            // We appear to have no permissions, that's not good 
+
+            currentuserError();
+
+        }  // if ( v_currentuserResponse.permissions != null )
+
+    }  // xhr_currentuser.onload = function()
+
+    xhr_currentuser.onerror = function() {
+
+        // Something has gone wrong, but we do not know what
+
+        if ( g_debugEnabled ) {
+
+            // Handy for debugging purposes ! 
+
+            console.log( "xhr_currentuser.onerror" );
+
+        }  // if ( g_debugEnabled )
+
+        currentuserError();
+
+    }  // xhr_currentuser.onerror = function()
+
+
+    function clearDisplay() {
+
+        document.getElementById( "t_title" ).innerHTML = "&nbsp";
+
+        document.getElementById( "d_status" ).innerHTML = "&nbsp";
+        document.getElementById( "i_status" ).className = "far fa-question-circle fa-hidden";
+        document.getElementById( "i_status" ).style     = "width: 90px;";
+
+        document.getElementById( "d_total" ).innerHTML = "&nbsp";
+        document.getElementById( "i_total" ).className = "fas fa-hourglass fa-hidden";
+        document.getElementById( "i_total" ).style     = "width: 90px;";
+
+        document.getElementById( "d_printed" ).innerHTML = "&nbsp";
+        document.getElementById( "i_printed" ).className = "fas fa-hourglass-half fa-hidden";
+        document.getElementById( "i_printed" ).style     = "width: 90px;";
+
+        document.getElementById( "d_remain" ).innerHTML = "&nbsp";
+        document.getElementById( "i_remain" ).className = "fas fa-hourglass-end fa-hidden";
+        document.getElementById( "i_remain" ).style     = "width: 90px;";
+
+        document.getElementById( "d_progress" ).innerHTML = "&nbsp";
+
+        document.getElementById( "d_message" ).innerHTML = "&nbsp";
+
+        let v_clearLoop = 0;
+
+        while ( v_clearLoop < 6 ) {
+
+            document.getElementById( "d_item" + v_clearLoop + "Target" ).innerHTML = "&nbsp";
+            document.getElementById( "i_item" + v_clearLoop + "Type"   ).className = "fas fa-bed fa-hidden";
+            document.getElementById( "d_item" + v_clearLoop + "Actual" ).innerHTML = "&nbsp";
+            document.getElementById( "i_item" + v_clearLoop + "Temp"   ).className = "fas fa-temperature-high fa-hidden";
+
+            v_clearLoop += 1;
+
+        }  // while ( v_clearLoop < 6 )
+
+    }  // function clearDisplay()
+
+
+    function setHeader( p_headerMessage ) {
+
+        document.getElementById( "t_title" ).innerHTML = p_headerMessage.substring( 0, g_headerLen );
+
+    }  // function setHeader() 
+
+
+    function setMessage( p_message ) {
+
+        document.getElementById( "d_message" ).innerHTML = p_message.substring( 0, g_messageLen );
+
+    }  // function setMessage() 
+
+
+    function serverError() {
+
+        // Either something went wrong with the API call or the server is
+        // in safe mode
+
+        if ( g_serverVersion == "server" ) {
+
+            setHeader( "OctoPrint server API issue!" );
+
+        } else {
+
+            setHeader( "OctoPrint "
+                       + g_serverVersion
+                       + " is in safe mode!"
+                     );
+
+        }  // if ( g_serverVersion == "server" ) 
+
+        setMessage( "Error = "
+                    + g_serverSafemode
+                  );
+
+        g_current_state = "serverError()";
+
+        displayStatus();
+
+    }  // function serverError()
+
+
+    function currentuserError() {
+
+        // If we don't even have the ability to see the OctoPrint status then
+        // there is no point continuing!
+
+        setHeader( "Configuration error ..." );
+
+        if ( g_apiKey == "### Enter API key here ###" 
+          || g_apiKey == ""
+          || g_baseURL == "### Enter server address here ###"
+          || g_baseURL == ""
+           ) {
+
+            setMessage( "Missing API key or server configuration" );
+
+        } else {
+
+            setMessage( "Permissions issue or server is inaccessible" );
+
+        }  // if ( g_apiKey == "### Enter API key here ###"  ...
+
+        g_current_state = "currentuserError()";
+
+        displayStatus();
+
+    }  // function currentuserError()
+
+
+    function displayStatus() {
+
+        let v_icon = "";
+
+        switch ( g_current_state ) {
+
+            case "Closed":
+            case "Offline":
+                v_icon          = "fas fa-toggle-off";
+                g_current_state = "Offline";
+                break;
+
+            case "Opening serial connection":
+            case "Detecting serial connection":
+            case "Connecting":
+                v_icon = "fas fa-satellite-dish";
+                break;
+
+            case "Operational":
+                v_icon = "fas fa-toggle-on";
+                break;
+
+            case "Printing from SD":
+            case "Printing":
+                v_icon          = "fas fa-print";
+                g_cancelledLoop = 0;
+                break;
+
+            case "Cancelling":
+                v_icon          = "fas fa-poo-storm";
+                g_cancelledLoop = 300;
+                break;
+
+            case "Finishing":
+            case "Completed":
+                v_icon = "fas fa-thumbs-up";
+                break;
+
+            case "Starting print from SD":
+            case "Starting to send file to SD":
+            case "Starting":
+                v_icon          = "fas fa-play-circle";
+                g_cancelledLoop = 0;
+                break;
+
+            case "Pausing":
+                v_icon = "fas fa-pause-circle";
+                break;
+
+            case "Paused":
+                v_icon = "fas fa-pause";
+                break;
+
+            case "Resuming":
+                v_icon = "fas fa-play";
+                break;
+
+            case "Sending file to SD":
+            case "Transferring file to SD":
+                v_icon = "fas fa-sd-card";
+                break;
+
+            case "Error":
+            case "Offline after error":
+                v_icon = "fas fa-exclamation-triangle";
+                break;    
+
+            case "currentuserError()":
+                v_icon = "fas fa-users-cog";
+                break;    
+
+            case "serverError()":
+                v_icon = "fas fa-exclamation-circle";
+                break;
+
+            default:
+                v_icon = "far fa-question-circle";
+
+        }  // switch ( g_current_state )
+
+        if ( g_current_state == "Operational"
+          && g_cancelledLoop > 0
+           ) {
+
+            // Ensure we show the "Cancelled" state for 5 minutes after cancellation... 
+            // Otherwise we almost immediately go back to "Operational"
+
+            v_icon           = "fas fa-poo-storm";
+            g_current_state  = "Cancelled";
+            g_cancelledLoop -= 1;
+
+        }  // if ( g_current_state == "Operational" ... 
+
+        document.getElementById( "d_status" ).innerHTML = g_current_state;
+        document.getElementById( "i_status" ).className = v_icon
+                                                          + " fa-showing";
+
+    }  // function displayStatus()
+
+
+    function myMain() {
+
+        setHeader( "OctoPrint "
+                   + g_serverVersion
+                   + " -> "
+                   + g_printerName
+                 );
+
+        displayStatus();
+
+        let xhr_connection = new XMLHttpRequest();
+        xhr_connection.open( 'GET', g_connectionURL );
+        xhr_connection.setRequestHeader( 'Authorization', 'Bearer ' + g_apiKey );
+        xhr_connection.responseType = 'json';
+        xhr_connection.send();
+
+        xhr_connection.onload = function() {
+
+            // Store the response received 
+
+            const v_connectionResponse = xhr_connection.response;
+
+            if ( g_debugEnabled ) {
+
+                // Handy for debugging purposes ! 
+
+                console.log( v_connectionResponse );
+
+            }  // if ( g_debugEnabled )
+
+            g_printerProfile = v_connectionResponse.current.printerProfile;
+            g_current_state  = v_connectionResponse.current.state;
+            g_printerName    = g_printerProfile;
+
+            if ( v_connectionResponse.options.printerProfiles != null ) {
+
+                let v_printersLoop = 0;
+
+                while ( v_printersLoop < v_connectionResponse.options.printerProfiles.length ) {
+
+                    if ( v_connectionResponse.options.printerProfiles[ v_printersLoop ].id == g_printerProfile ) {
+
+                        g_printerName = v_connectionResponse.options.printerProfiles[ v_printersLoop ].name;
+
+                    }  // if ( v_connectionResponse.options.printerProfiles[ v_printersLoop ].id == g_printerProfile ) 
+
+                    v_printersLoop += 1;
+
+                }  // while ( v_printersLoop < v_connectionResponse.options.printerProfiles.length ) 
+
+            }  // if ( v_connectionResponse.options.printerProfiles != null ) 
+
+            if ( g_current_state == "Closed"
+              || g_current_state == "Offline"
+               ) {
+
+                if ( g_switchedOn ) {
+
+                    g_switchedOn = false;
+
+                    clearDisplay();
+
+                    setHeader( "OctoPrint "
+                               + g_serverVersion
+                               + " -> "
+                               + g_printerName
+                             );
+
+                    displayStatus();
+
+                    g_displayRefresh = 60000;  // Go to sleep for 60 seconds before checking for a new connection 
+
+                }  // if ( g_switchedOn ) 
+
+            } else if ( !g_switchedOn ) {
+
+                g_switchedOn = true;
+
+                displayStatus();
+
+                g_displayRefresh = 1;  // Re-run in one milli-second at which point we'll drop into main processing 
+
+            } else {
+
+                // Main processing is done here...
+
+                g_displayRefresh = 1000;  // Set refresh period to once a second 
+
+                callAPIJobEndpoint();
+
+                callAPIPrinterEndpoint();
+
+            }  // if ( g_current_state == "Closed" ...
+
+        }  // xhr_connection.onload = function()
+
+        xhr_connection.onerror = function() {
+
+            // Something has gone wrong, but we do not know what
+
+            if ( g_debugEnabled ) {
+
+                // Handy for debugging purposes ! 
+
+                console.log( "xhr_connection.onerror" );
+
+            }  // if ( g_debugEnabled )
+
+            g_current_state  = "Error";
+
+            displayStatus();
+
+            g_displayRefresh = 60000;  // Go to sleep for 60 seconds before checking for a new connection 
+
+        }  // xhr_connection.onerror = function()
+
+        // Snooze for the alloted time then re-run the main proc!
+
+        setTimeout( myMain, g_displayRefresh );
+
+    }  // function myMain() 
+
+
+    function callAPIJobEndpoint() {
+
+        // Call /api/job to get information about the current job that is being processed 
+
+        let xhr_job = new XMLHttpRequest();
+        xhr_job.open( 'GET', g_jobURL );
+        xhr_job.setRequestHeader( 'Authorization', 'Bearer ' + g_apiKey );
+        xhr_job.responseType = 'json';
+        xhr_job.send();
+
+        xhr_job.onload = function() {
+
+            // Store the response received 
+
+            const v_jobResponse = xhr_job.response;
+
+            if ( g_debugEnabled ) {
+
+                // Handy for debugging purposes ! 
+
+                console.log( v_jobResponse );
+
+            }  // if ( g_debugEnabled )
+
+            let v_progress_completion = 0;
+            let v_job_file_name       = "&nbsp;";
+
+            if ( v_jobResponse.state != g_current_state ) {
+
+                g_current_state = v_jobResponse.state;
+
+            }  // if ( v_jobResponse.state != g_current_state )
+
+            if ( v_jobResponse.progress.completion != null ) {
+
+                v_progress_completion = v_jobResponse.progress.completion;
+
+                displayProgress( v_progress_completion );
+
+            }  // if ( v_jobResponse.progress.completion != null ) 
+
+            if ( v_jobResponse.job.file.name != null
+              && v_jobResponse.job.file.name != "" ) {
+
+                if ( g_current_state == "Operational"
+                  && v_progress_completion >= 100
+                   ) {
+
+                    v_job_file_name = v_jobResponse.job.file.name + " is complete!";
+                    g_current_state = "Completed";
+
+                } else if ( g_current_state == "Operational" ) {
+
+                    v_job_file_name = "Loaded " + v_jobResponse.job.file.name;
+
+                } else {
+
+                    v_job_file_name = g_current_state + " " + v_jobResponse.job.file.name;
+
+                }  // if ( g_current_state == "Operational" ...
+
+            }  // if ( v_jobResponse.job.file.name != null ...
+
+            let v_job_progress_filepos = 0;
+            let v_job_job_file_size    = 0;
+
+            if ( v_jobResponse.progress.filepos != null ) {
+
+                v_job_progress_filepos = v_jobResponse.progress.filepos;
+
+            }  // if ( v_jobResponse.progress.filepos != null )
+
+            if ( v_jobResponse.job.file.size != null ) {
+
+                v_job_job_file_size = v_jobResponse.job.file.size;
+
+            }  // if ( v_jobResponse.job.file.size; != null )
+
+            if ( v_job_progress_filepos > 0 
+              && v_job_job_file_size > 0 
+              && v_job_file_name != "&nbsp;"
+               ) {
+
+                v_job_file_name += " ["
+                                +  formatBytes( v_job_progress_filepos, "iec" )
+                                +  "/"
+                                +  formatBytes( v_job_job_file_size, "iec" )
+                                +  "]";
+
+            }  // if ( v_job_progress_filepos > 0  ...
+
+            setMessage( v_job_file_name );
+
+            displayStatus();
+
+            let v_job_averagePrintTime         = "&nbsp;";
+            let v_job_estimatedPrintTime       = "&nbsp;";
+            let v_progress_printTimeLeft       = "&nbsp;";
+            let v_progress_printTime           = "&nbsp;";
+            let v_progress_printTimeLeftOrigin = "";
+
+            if ( v_jobResponse.job.averagePrintTime != null ) {
+
+                v_job_averagePrintTime = ( '0'
+                                           + Math.floor( v_jobResponse.job.averagePrintTime / 3600 )
+                                         ).slice( -2 )
+                                         + ':' 
+                                         + ( '0'
+                                             + Math.floor( v_jobResponse.job.averagePrintTime / 60 ) % 60
+                                           ).slice ( -2 )
+                                         + ':'
+                                         + ( '0'
+                                             + Math.floor( v_jobResponse.job.averagePrintTime % 60 )
+                                           ).slice( -2 );
+
+            }  // ( v_jobResponse.job.averagePrintTime != null )
+
+            if ( v_jobResponse.job.estimatedPrintTime != null ) {
+
+                v_job_estimatedPrintTime = ( '0'
+                                             + Math.floor( v_jobResponse.job.estimatedPrintTime / 3600 )
+                                           ).slice( -2 )
+                                           + ':' 
+                                           + ( '0'
+                                               + Math.floor( v_jobResponse.job.estimatedPrintTime / 60 ) % 60
+                                             ).slice ( -2 )
+                                           + ':'
+                                           + ( '0'
+                                               + Math.floor( v_jobResponse.job.estimatedPrintTime % 60 )
+                                             ).slice( -2 );
+
+            }  // ( v_jobResponse.job.estimatedPrintTime != null )
+
+            if ( v_jobResponse.progress.printTime != null ) {
+
+                v_progress_printTime = ( '0'
+                                         + Math.floor( v_jobResponse.progress.printTime / 3600 )
+                                       ).slice( -2 )
+                                       + ':'
+                                       + ( '0'
+                                           + Math.floor( v_jobResponse.progress.printTime / 60 ) % 60
+                                         ).slice( -2 )
+                                       + ':'
+                                       + ( '0'
+                                           + Math.floor( v_jobResponse.progress.printTime % 60 )
+                                         ).slice( -2 );
+
+            }  // ( v_jobResponse.progress.printTime != null )
+
+            if ( v_jobResponse.progress.printTimeLeft != null ) {
+
+                v_progress_printTimeLeft = ( '0'
+                                             + Math.floor( v_jobResponse.progress.printTimeLeft / 3600 )
+                                           ).slice( -2 )
+                                           + ':'
+                                           + ( '0'
+                                               + Math.floor( v_jobResponse.progress.printTimeLeft / 60 ) % 60
+                                             ).slice( -2 )
+                                           + ':'
+                                           + ( '0'
+                                               + Math.floor( v_jobResponse.progress.printTimeLeft % 60 )
+                                             ).slice( -2 );
+
+            }  // if ( v_jobResponse.progress.printTimeLeft != null )
+
+            if ( v_jobResponse.progress.printTimeLeftOrigin != null ) {
+
+                v_progress_printTimeLeftOrigin = v_jobResponse.progress.printTimeLeftOrigin;
+
+            }  // if ( v_jobResponse.progress.printTimeLeftOrigin != null )
+
+            if ( v_job_averagePrintTime != "&nbsp;" ) {
+
+                displayPrintTimes( v_job_averagePrintTime
+                                 , v_progress_printTime
+                                 , v_progress_printTimeLeft
+                                 , v_progress_printTimeLeftOrigin
+                                 );
+
+            } else {
+
+                displayPrintTimes( v_job_estimatedPrintTime
+                                 , v_progress_printTime
+                                 , v_progress_printTimeLeft
+                                 , v_progress_printTimeLeftOrigin
+                                 );
+
+            }  // if ( v_job_averagePrintTime == "&nbsp;" ) 
+
+            // Save filament details for later
+
+            if ( v_jobResponse.job.filament.tool0 != null ) {
+
+                g_filament0_length = v_jobResponse.job.filament.tool0.length;
+                g_filament0_volume = v_jobResponse.job.filament.tool0.volume;
+
+            }  // if ( v_jobResponse.job.filament.tool0 != null )
+
+            if ( v_jobResponse.job.filament.tool1 != null ) {
+
+                g_filament1_length = v_jobResponse.job.filament.tool1.length;
+                g_filament1_volume = v_jobResponse.job.filament.tool1.volume;
+
+            }  // if ( v_jobResponse.job.filament.tool1 != null )
+
+        }  // xhr_job.onload = function()
+
+        xhr_job.onerror = function() {
+
+            // Something has gone wrong, but we do not know what
+
+            if ( g_debugEnabled ) {
+
+                // Handy for debugging purposes ! 
+
+                console.log( "xhr_job.onerror" );
+
+            }  // if ( g_debugEnabled )
+
+            setMessage( "Error calling \"/api/job\" endpoint!" );
+
+            displayPrintTimes( "Error"
+                             , "Error"
+                             , "Error"
+                             , "Error"
+                             );
+
+        }  // xhr_job.onerror = function()
+
+    }  // function callAPIJobEndpoint
+
+
+    function displayProgress( p_progress ) {
+
+        let v_barColour = "rgb(34,139,34);";
+
+        if ( p_progress < 100 ) {
+
+            v_barColour = "rgb(33,153,255);";
+
+        }  // if ( p_progress < 100 ) 
+
+        document.getElementById( "d_progress" ).innerHTML = "<div style=\"background-color: "
+                                                            + v_barColour
+                                                            + " width:"
+                                                            + p_progress
+                                                            + "%;\"><center>"
+                                                            + p_progress.toFixed(1)
+                                                            + "%</center></div>";
+
+    }  // function displayProgress() 
+
+
+    function displayPrintTimes( p_job_estimatedPrintTime
+                              , p_progress_printTime
+                              , p_progress_printTimeLeft
+                              , p_progress_printTimeLeftOrigin
+                              ) {
+
+        let v_printTimeLeftIcon = "";
+
+        switch ( p_progress_printTimeLeftOrigin ) {
+
+            case "analysis":
+            case "mixed-analysis":
+                v_printTimeLeftIcon = "fas fa-stopwatch";
+                break;
+
+            case "average":
+            case "mixed-average":
+                v_printTimeLeftIcon = "fas fa-history";
+                break;
+
+            case "estimate":
+                v_printTimeLeftIcon = "fas fa-clock";
+                break;
+
+            case "linear":
+                v_printTimeLeftIcon = "fas fa-hourglass-end";
+                break;
+
+            case "genius":
+                v_printTimeLeftIcon = "fas fa-user-clock";
+                break;
+
+            case "Error":
+                v_printTimeLeftIcon = "fas fa-exclamation-triangle";
+                break;
+
+            default:
+                v_printTimeLeftIcon = "fas fa-hourglass-end";
+
+        }  // switch ( p_progress_printTimeLeftOrigin ) 
+
+        document.getElementById( "d_total" ).innerHTML = p_job_estimatedPrintTime;
+
+        if ( p_job_estimatedPrintTime != "&nbsp;" ) {
+
+            document.getElementById( "i_total" ).className = "fas fa-hourglass fa-showing";
+
+        } else {
+
+            document.getElementById( "i_total" ).className = "fas fa-hourglass fa-hidden";
+
+        }  // if ( p_job_estimatedPrintTime != "&nbsp;" ) 
+
+        document.getElementById( "d_printed" ).innerHTML = p_progress_printTime;
+
+        if ( p_progress_printTime != "&nbsp;" ) {
+
+            document.getElementById( "i_printed" ).className = "fas fa-hourglass-half fa-showing";
+
+        } else {
+
+            document.getElementById( "i_printed" ).className = "fas fa-hourglass-half fa-hidden";
+
+        }  // if ( p_progress_printTime != "&nbsp;" ) 
+
+        document.getElementById( "d_remain" ).innerHTML = p_progress_printTimeLeft;
+
+        if ( p_progress_printTimeLeft != "&nbsp;" ) {
+
+            document.getElementById( "i_remain" ).className = v_printTimeLeftIcon + " fa-showing";
+
+        } else {
+
+            document.getElementById( "i_remain" ).className = v_printTimeLeftIcon + " fa-hidden";
+
+        }  // if ( p_progress_printTimeLeft != "&nbsp;" ) 
+
+    }  // function displayPrintTimes( p_job_estimatedPrintTime ...
+
+
+    function formatBytes( p_bytes
+                        , p_units
+                        ) {
+ 
+        // p_bytes: the size in bytes to be converted.
+        // p_units: 'si'|'iec' si units means the order of magnitude is 10^3, iec uses 2^10
+
+        // Handle some special cases
+        if ( p_bytes == 0 ) return '0 Bytes';
+        if ( p_bytes == 1 ) return '1 Byte';
+        if ( p_bytes == -1 ) return '-1 Byte';
+
+        var bytes = Math.abs( p_bytes );
+
+        if ( p_units
+          && p_units.toLowerCase()
+          && p_units.toLowerCase() == 'si'
+           ) {
+ 
+            // SI units use the Metric representation based on 10^3 as a order of magnitude
+
+            var orderOfMagnitude = Math.pow( 10, 3 );
+            var abbreviations = [ 'Bytes', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB' ];
+
+        } else {
+
+            // IEC units use 2^10 as an order of magnitude
+
+            var orderOfMagnitude = Math.pow( 2, 10 );
+            var abbreviations = [ 'Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB' ];
+
+        }  // if ( p_units ... 
+
+        var i = Math.floor( Math.log( bytes ) / Math.log( orderOfMagnitude ) );
+        var result = ( bytes / Math.pow( orderOfMagnitude, i ) );
+
+        // This will get the sign right
+
+        if ( p_bytes < 0 ) {
+
+            result *= -1;
+
+        }  // if ( p_bytes < 0 ) 
+
+        // This bit here is purely for show. it drops the precision on numbers greater than 100 before the units.
+        // it also always shows the full number of bytes if bytes is the unit.
+
+        if ( result >= 99.995
+          || i == 0
+           ) {
+
+            return result.toFixed( 0 ) + ' ' + abbreviations[ i ];
+
+        } else {
+ 
+            return result.toFixed( 2 ) + ' ' + abbreviations[ i ];
+ 
+        }  // if ( result >= 99.995 ... 
+
+    }  // function formatBytes( p_bytes ... 
+
+
+    function callAPIPrinterEndpoint() {
+
+        // Call /api/printer to get information about the temperatures 
+
+        let xhr_printer = new XMLHttpRequest();
+        xhr_printer.open( 'GET', g_printerURL );
+        xhr_printer.setRequestHeader( 'Authorization', 'Bearer ' + g_apiKey );
+        xhr_printer.responseType = 'json';
+        xhr_printer.send();
+
+        xhr_printer.onload = function() {
+
+            // Store the response received 
+
+            const v_printerResponse = xhr_printer.response;
+
+            if ( g_debugEnabled ) {
+
+                // Handy for debugging purposes ! 
+
+                console.log( v_printerResponse );
+
+            }  // if ( g_debugEnabled )
+
+            let v_tempItem           = "&nbsp;";
+            let v_temperature_actual = 0;
+            let v_temperature_target = 0;
+            let v_temperature_offset = 0;
+
+            let v_configLoop = 0;
+
+            while ( v_configLoop < 6 ) {
+
+                v_tempItem           = g_tempConfig[ v_configLoop ];
+                v_temperature_actual = 0;
+                v_temperature_target = 0;
+                v_temperature_offset = 0;
+
+                if ( v_tempItem != null
+                  && v_tempItem != ""
+                  && v_printerResponse.temperature[ v_tempItem ] != null
+                ) {
+
+                    v_temperature_actual = v_printerResponse.temperature[ v_tempItem ].actual;
+                    v_temperature_target = v_printerResponse.temperature[ v_tempItem ].target;
+                    v_temperature_offset = v_printerResponse.temperature[ v_tempItem ].offset;
+
+                } else if ( v_tempItem != null
+                         && v_tempItem != ""
+                         && v_tempItem.includes( "filament" )
+                          ) {
+
+                    if ( v_tempItem == "filament0" ) {
+
+                        if ( g_filament0_length == 0
+                          && g_filament0_volume == 0
+                           ) {
+
+                            v_tempItem = "&nbsp;";
+
+                        } else {
+
+                            v_temperature_target = g_filament0_length;
+                            v_temperature_actual = g_filament0_volume;
+
+                        }  // if ( g_filament0_length == 0 ... 
+
+                    } else {
+
+                        if ( g_filament1_length == 0
+                          && g_filament1_volume == 0
+                           ) {
+
+                            v_tempItem = "&nbsp;";
+
+                        } else {
+
+                            v_temperature_target = g_filament1_length;
+                            v_temperature_actual = g_filament1_volume;
+
+                        }  // if ( g_filament1_length == 0 ...
+
+                    }  // if ( v_tempItem == "filament0" )
+
+                } else {
+
+                    v_tempItem = "&nbsp;";
+
+                }  // if ( v_tempItem != null ... 
+
+                displayTemperatures( v_configLoop
+                                   , v_tempItem
+                                   , v_temperature_actual
+                                   , v_temperature_target
+                                   , v_temperature_offset
+                                   );
+
+                v_configLoop += 1;
+
+            }  // while ( v_configLoop < 6 )
+
+        }  // xhr_printer.onload = function()
+
+        xhr_printer.onerror = function() {
+
+            // Something has gone wrong, but we do not know what
+
+            if ( g_debugEnabled ) {
+
+                // Handy for debugging purposes ! 
+
+                console.log( "xhr_printer.onerror" );
+
+            }  // if ( g_debugEnabled )
+
+            setMessage( "Error calling \"/api/printer\" endpoint!" );
+
+            displayTemperatures( 1
+                               , "Error"
+                               , -1
+                               , -1
+                               , -1
+                               );
+
+        }  // xhr_printer.onerror = function()
+
+    }  // function callAPIPrinterEndpoint()
+
+
+    function displayTemperatures( p_itemNumber
+                                , p_itemType
+                                , p_temperature_actual
+                                , p_temperature_target
+                                , p_temperature_offset
+                                ) {
+
+        let v_tempItemIcon = "";
+
+        switch ( p_itemType ) {
+
+            case "bed":
+                v_tempItemIcon = "fas fa-bed";
+                break;
+
+            case "chamber":
+                v_tempItemIcon = "fas fa-chalkboard";
+                break;
+
+            case "tool0":
+                v_tempItemIcon = "fas fa-pen-fancy";
+                break;
+
+            case "tool1":
+                v_tempItemIcon = "fas fa-pen";
+                break;
+
+            case "filament0":
+                v_tempItemIcon = "far fa-life-ring";
+                break;
+
+            case "filament1":
+                v_tempItemIcon = "fas fa-plus-circle";
+                break;
+
+            case "Error":
+                v_tempItemIcon = "fas fa-exclamation-triangle";
+                break;
+
+            default:
+                v_tempItemIcon = "far fa-question-circle";
+
+        }  // switch ( p_itemType ) 
+
+        if ( p_temperature_actual > 0
+          || p_temperature_target > 0
+          || p_temperature_offset > 0
+           ) {
+
+            document.getElementById( "i_item" + p_itemNumber + "Type" ).className = v_tempItemIcon
+                                                                                    + " fa-showing";
+
+        } else { 
+
+            document.getElementById( "i_item" + p_itemNumber + "Type" ).className = v_tempItemIcon
+                                                                                    + " fa-hidden";
+
+        }  // if ( p_temperature_actual > 0 ... 
+
+        let v_tempTempIcon = "";
+
+        if ( p_itemType == "&nbsp;" ) {
+
+            document.getElementById( "d_item" + p_itemNumber + "Target" ).innerHTML = "&nbsp";
+            document.getElementById( "d_item" + p_itemNumber + "Actual" ).innerHTML = "&nbsp";
+            v_tempTempIcon                                                          = "fas fa-temperature-high";
+
+        } else if ( p_itemType.includes( "filament" ) ) {
+
+            document.getElementById( "d_item" + p_itemNumber + "Target" ).innerHTML = ( p_temperature_target / 1000 ).toFixed(1) + "m";
+            document.getElementById( "d_item" + p_itemNumber + "Actual" ).innerHTML = p_temperature_actual.toFixed(1) + "cm³";
+            v_tempTempIcon                                                          = "fas fa-temperature-high";
+
+        } else if ( p_temperature_target == 0
+                 || p_temperature_target + p_temperature_offset == 0
+                  ) {
+
+            document.getElementById( "d_item" + p_itemNumber + "Target" ).innerHTML = "&nbsp";
+            document.getElementById( "d_item" + p_itemNumber + "Actual" ).innerHTML = p_temperature_actual.toFixed(1);
+
+            if ( p_temperature_actual > 40 ) {
+
+                v_tempTempIcon = "fas fa-temperature-high";
+
+            } else {
+
+                v_tempTempIcon = "fas fa-temperature-low";
+
+            }  // if ( p_temperature_actual > 40 )
+
+        } else {
+
+            document.getElementById( "d_item" + p_itemNumber + "Target" ).innerHTML = p_temperature_target.toFixed(1);
+            document.getElementById( "d_item" + p_itemNumber + "Actual" ).innerHTML = p_temperature_actual.toFixed(1);
+
+            if ( p_temperature_offset != 0 ) {
+
+                let v_offsetSign = "+";
+
+                if ( p_temperature_offset < 0 ) {
+
+                    v_offsetSign = "-";
+
+                }  // if ( p_temperature_offset < 0 )
+
+                document.getElementById( "d_item" + p_itemNumber + "Target" ).innerHTML = p_temperature_target.toFixed(1)
+                                                                                          + " "
+                                                                                          + v_offsetSign
+                                                                                          + " "
+                                                                                          + Math.abs( p_temperature_offset ).toFixed(0);
+
+            }  // if ( p_temperature_offset != 0 ) 
+
+            let v_tempTargetPercentage = p_temperature_actual / ( p_temperature_target + p_temperature_offset ) * 100;
+
+            if ( v_tempTargetPercentage < 20 ) {
+
+                v_tempTempIcon = "fas fa-thermometer-empty";
+
+            } else if ( v_tempTargetPercentage < 45 ) {
+
+                v_tempTempIcon = "fas fa-thermometer-quarter";
+
+            } else if ( v_tempTargetPercentage < 70 ) {
+
+                v_tempTempIcon = "fas fa-thermometer-half";
+
+            } else if ( v_tempTargetPercentage < 95 ) {
+
+                v_tempTempIcon = "fas fa-thermometer-three-quarters";
+
+            } else {
+
+                v_tempTempIcon = "fas fa-thermometer-full";
+
+            }  // if ( v_tempTargetPercentage < 20 )
+
+        }  // if ( p_itemType == "&nbsp;" )
+
+        if ( p_itemType == "&nbsp;"
+          || p_itemType.includes( "filament" )
+           ) {
+
+            document.getElementById( "i_item" + p_itemNumber + "Temp" ).className = v_tempTempIcon
+                                                                                     + " fa-hidden";
+
+        } else {
+ 
+            document.getElementById( "i_item" + p_itemNumber + "Temp" ).className = v_tempTempIcon
+                                                                                     + " fa-showing";
+
+        }  // if ( p_itemType == "&nbsp;" ...
+
+    }  // function displayTemperatures( p_itemNumber ...
+
+    </script>
+
+  </body>
+
+</html>
