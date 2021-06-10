@@ -1,8 +1,7 @@
-Version 1.0 of OctoPrint Widget
-
+Version 1.1 of OctoPrint Widget
 (C) K.Fairhurst 2021
-
 v1.0   Initial Release
+v1.1   Tweaks and improvements 
 
 Following configuration items are used to determine how the widget will work
 
